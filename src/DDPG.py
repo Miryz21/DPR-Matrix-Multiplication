@@ -10,14 +10,16 @@ import pickle
 with open('./tensor_holder/tensors', 'rb') as f:
     multiply_tensors = pickle.load(f)
 
+values = [-1, 0, 1]
+
 
 # Определение актора (Actor)
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, action_bound):
         super(Actor, self).__init__()
-        self.layer1 = nn.Linear(state_dim, 400)
-        self.layer2 = nn.Linear(400, 300)
-        self.layer3 = nn.Linear(300, action_dim)
+        self.layer1 = nn.Linear(state_dim, 128)
+        self.layer2 = nn.Linear(128, 64)
+        self.layer3 = nn.Linear(64, action_dim)
         self.action_bound = action_bound
 
     def forward(self, state):
@@ -32,9 +34,9 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(Critic, self).__init__()
-        self.layer1 = nn.Linear(state_dim + action_dim, 400)
-        self.layer2 = nn.Linear(400, 300)
-        self.layer3 = nn.Linear(300, 1)
+        self.layer1 = nn.Linear(state_dim + action_dim, 128)
+        self.layer2 = nn.Linear(128, 64)
+        self.layer3 = nn.Linear(64, 1)
 
     def forward(self, state, action):
         x = torch.cat([state, action], 1)
@@ -159,27 +161,68 @@ class Environment:
         return self.state, reward, done
 
 
-# Example usage
-env_shape = (2, 2, 2)  # Shape of the environment tensor
-env = Environment(env_shape)
+# # Example usage
+# env_shape = (2, 2, 2)  # Shape of the environment tensor
+# env = Environment(env_shape)
+#
+# # Reset the environment
+# state = env.reset()
+# print("Initial state:")
+# print(state)
+#
+# # Take some actions in the environment
+# actions = [[[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]]]
+# for action in actions:
+#     state, reward, done = env.step(action)
+#     print("Action:", action)
+#     print("State:")
+#     print(state)
+#     print("Reward:", reward)
+#     print("Done:", done)
+#     print()
+#
+# # Reset the environment
+# state = env.reset()
+# print("State after reset:")
+# print(state)
 
-# Reset the environment
-state = env.reset()
-print("Initial state:")
-print(state)
+# Пример использования DDPG агента
+state_dim = 10  # Размерность состояния
+action_dim = 5  # Размерность вектора действий
+action_bound = 1.0  # Максимальное значение действий
 
-# Take some actions in the environment
-actions = [[[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]]]
-for action in actions:
-    state, reward, done = env.step(action)
-    print("Action:", action)
-    print("State:")
-    print(state)
-    print("Reward:", reward)
-    print("Done:", done)
-    print()
+agent = DDPGAgent(state_dim, action_dim, action_bound)
 
-# Reset the environment
-state = env.reset()
-print("State after reset:")
-print(state)
+# Создание replay buffer
+replay_buffer_size = 100000
+replay_buffer = ReplayBuffer(replay_buffer_size)
+
+# Обучение агента
+batch_size = 64
+num_episodes = 1000
+
+for episode in range(num_episodes):
+    # Инициализация состояния
+    state = env.reset()
+
+    episode_reward = 0
+    done = False
+
+    while not done:
+        # Выбор действия
+        action = agent.select_action(state)
+
+        # Применение действия в среде
+        next_state, reward, done, _ = env.step(action)
+
+        # Добавление перехода в replay buffer
+        replay_buffer.add(state, action, next_state, reward, done)
+
+        # Обновление агента
+        if len(replay_buffer) >= batch_size:
+            agent.train(replay_buffer, batch_size)
+
+        state = next_state
+        episode_reward += reward
+
+    print("Episode: {}, Reward: {}".format(episode, episode_reward))
